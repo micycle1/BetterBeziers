@@ -1,6 +1,5 @@
 package micycle.betterbeziers;
 
-
 import org.apache.commons.math3.analysis.UnivariateFunction;
 import org.apache.commons.math3.analysis.integration.IterativeLegendreGaussIntegrator;
 
@@ -14,10 +13,24 @@ import org.apache.commons.math3.analysis.integration.IterativeLegendreGaussInteg
  */
 public class CubicBezier {
 
-	double[] p1, cp1, cp2, p2;
+	private static final double CURVE_PARAMETER_EPSILON = 1E-2;
+	private static final int CURVE_PARAMETER_MAX_ITER = 10;
+
+	private static final int APPROXIMATION_SAMPLES = 10;
+	private boolean approximationIsSetup = false;
+	private double[] sSample, tSample, tsSlope;
+
+	final double[] p1, cp1, cp2, p2;
 	final UnivariateFunction speedFunction;
 	double length = Double.NaN;
 
+	/**
+	 * 
+	 * @param p1  first anchor point
+	 * @param cp1 first control point
+	 * @param cp2 second control point
+	 * @param p2  second anchor point
+	 */
 	public CubicBezier(double[] p1, double[] cp1, double[] cp2, double[] p2) {
 		this.p1 = p1;
 		this.cp1 = cp1;
@@ -25,7 +38,11 @@ public class CubicBezier {
 		this.p2 = p2;
 
 		speedFunction = makeSpeedFunction();
-		init();
+		initApproximation();
+	}
+
+	public CubicBezier(double x1, double y1, double cx1, double cy1, double cx2, double cy2, double x2, double y2) {
+		this(new double[] { x1, y1 }, new double[] { cx1, cy1 }, new double[] { cx2, cy2 }, new double[] { x2, y2 });
 	}
 
 	/**
@@ -52,7 +69,7 @@ public class CubicBezier {
 		 * approximation of the definite integral of the speed function, which can be
 		 * taken as a very good approximation of the length of the Bezier curve.
 		 */
-		int n = 5;
+		int n = 6; // for an n, integrator can evaluate 2n-1 degree polynomials exactly
 		IterativeLegendreGaussIntegrator integrator = new IterativeLegendreGaussIntegrator(n, 1e-3, 1e-5);
 		double length = integrator.integrate(Integer.MAX_VALUE, speedFunction, tStart, tEnd);
 		return length;
@@ -89,8 +106,28 @@ public class CubicBezier {
 		return getPointAtParameter(getCurveParameter(length));
 	}
 
-	private static final double CURVE_PARAMETER_EPSILON = 1E-2;
-	private static final int CURVE_PARAMETER_MAX_ITER = 10;
+	public double[][] sampleEquidistantPoints(int numSamples) {
+		double[][] t = new double[numSamples][2];
+		t[0] = p1.clone();
+		t[numSamples - 1] = p2.clone();
+		for (int i = 1; i < numSamples - 1; i++) {
+			double fraction = (double) i / (numSamples - 1);
+			t[i] = getPointAtFraction(fraction);
+		}
+		return t;
+	}
+
+	public double[][] sampleEquidistantPoints(final double distance) {
+		int numSamples = (int) Math.floor(getLength() / distance) + 2;
+		double[][] t = new double[numSamples][2];
+		t[0] = p1.clone();
+		t[numSamples - 1] = p2.clone();
+		for (int i = 1; i < numSamples - 1; i++) {
+			double length = i * distance;
+			t[i] = getPointAtLength(length);
+		}
+		return t;
+	}
 
 	/**
 	 * Finds time t for a specified arc length s. The algorithm is a hybrid of
@@ -172,8 +209,9 @@ public class CubicBezier {
 		if (s >= getLength()) {
 			return 1; // tmax
 		}
+		initApproximation();
 		int i;
-		for (i = 1; i < samples; i++) {
+		for (i = 1; i < APPROXIMATION_SAMPLES; i++) {
 			if (s < sSample[i]) {
 				break;
 			}
@@ -182,27 +220,24 @@ public class CubicBezier {
 		return t;
 	}
 
-	private int samples = 10;
-	private double[] sSample, tSample, tsSlope;
-
-	void init() {
-		int n = samples;
-		sSample = new double[n + 1];
-		tSample = new double[n + 1];
-		tsSlope = new double[n + 1];
-		tsSlope[0] = 0; // tmin
-		for (int i = 1; i < n; i++) {
-			sSample[i] = getLength() * i / n;
-			tSample[i] = getCurveParameter(sSample[i]);
-			tsSlope[i] = (tSample[i] - tSample[i - 1]) / (sSample[i] - sSample[i - 1]);
+	private void initApproximation() {
+		if (!approximationIsSetup) {
+			int n = APPROXIMATION_SAMPLES;
+			sSample = new double[n + 1];
+			tSample = new double[n + 1];
+			tsSlope = new double[n + 1];
+			tsSlope[0] = 0; // tmin
+			for (int i = 1; i < n; i++) {
+				sSample[i] = getLength() * i / n;
+				tSample[i] = getCurveParameter(sSample[i]);
+				tsSlope[i] = (tSample[i] - tSample[i - 1]) / (sSample[i] - sSample[i - 1]);
+			}
+			sSample[n] = getLength();
+			tSample[n] = 1; // tmax
+			tsSlope[n] = (tSample[n] - tSample[n - 1]) / (sSample[n] - sSample[n - 1]);
+			
+			approximationIsSetup = true;
 		}
-		sSample[n] = getLength();
-		tSample[n] = 1; // tmax
-		tsSlope[n] = (tSample[n] - tSample[n - 1]) / (sSample[n] - sSample[n - 1]);
-	}
-	
-	public double[] subdivideByTime(double t) {
-		return null;
 	}
 
 	/**
