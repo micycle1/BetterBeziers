@@ -12,6 +12,6 @@ This library offers high-precision methods for computing the length of a cubic b
 
 Both of these algorithms are described in _Moving Along a Curve with Specified Speed_ [[1]].
 
-With these it becomes trivial to then sample the curve (find `t`) for a distance (or fractional distance) along the curve, as well as subdividing the curve into equal-length segments.
+Having these two functions, it becomes trivial to sample the curve (find `t`) for a distance (or fractional distance) along the curve, as well as subdividing the curve into equal-length segments – the library also offers methods for this.
 
 [1]: https://www.geometrictools.com/Documentation/MovingAlongCurveSpecifiedSpeed.pdf
