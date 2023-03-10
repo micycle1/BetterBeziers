@@ -60,10 +60,10 @@ public class CubicBezier {
 	 * Constructs an instance of a {@code CubicBezier} using the given control
 	 * points.
 	 * 
-	 * @param p1  first anchor point
-	 * @param cp1 first control point
-	 * @param cp2 second control point
-	 * @param p2  second anchor point
+	 * @param p1  coords of first anchor point
+	 * @param cp1 coords of first control point
+	 * @param cp2 coords of second control point
+	 * @param p2  coords of second anchor point
 	 */
 	public CubicBezier(double[] p1, double[] cp1, double[] cp2, double[] p2) {
 		this.p1 = p1;
@@ -89,6 +89,18 @@ public class CubicBezier {
 	 */
 	public CubicBezier(double x1, double y1, double cx1, double cy1, double cx2, double cy2, double x2, double y2) {
 		this(new double[] { x1, y1 }, new double[] { cx1, cy1 }, new double[] { cx2, cy2 }, new double[] { x2, y2 });
+	}
+
+	/**
+	 * Constructs an instance of a {@code CubicBezier} using the given control
+	 * points.
+	 *
+	 * @param points a 2D array of control points, where the first dimension is the
+	 *               point index and the second dimension is the x (0) and y (1)
+	 *               coordinates
+	 */
+	public CubicBezier(double[][] points) {
+		this(points[0], points[1], points[2], points[3]);
 	}
 
 	/**
