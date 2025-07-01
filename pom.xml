@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.github.micycle1</groupId>
 	<artifactId>betterbeziers</artifactId>
-	<version>1.0-SNAPSHOT</version>
+	<version>1.0</version>
 	<name>BetterBeziers</name>
 	<description>High-precision utils for 2D Cubic Bezier Curves</description>
 
@@ -56,9 +56,10 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-math3</artifactId>
-			<version>3.6.1</version>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter-api</artifactId>
+			<version>5.13.2</version>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 

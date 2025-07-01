@@ -1,8 +1,5 @@
 package com.github.micycle1.betterbeziers;
 
-import org.apache.commons.math3.analysis.UnivariateFunction;
-import org.apache.commons.math3.analysis.integration.IterativeLegendreGaussIntegrator;
-
 /**
  * Represents a 2D cubic Bezier curve defined by four control points.
  * <p>
@@ -33,14 +30,15 @@ public class CubicBezier {
 	protected static final double CURVE_PARAMETER_EPSILON = 1E-3;
 	protected static final int CURVE_PARAMETER_MAX_ITER = 10;
 
-	/**
-	 * The IterativeLegendreGaussIntegrator class is used to approximate the
-	 * definite integral of the speed function from 0 to 1. The method returns an
-	 * approximation of the definite integral of the speed function, which can be
-	 * taken as a very good approximation of the length of the Bezier curve. For a
-	 * given n (=6 here) the integrator can evaluate 2n-1 degree polynomials exactly
-	 */
-	protected static final IterativeLegendreGaussIntegrator integrator = new IterativeLegendreGaussIntegrator(6, 1e-3, 1e-5);
+	/* 6-point (order-12) rule – three positive nodes and weights */
+	private static final double[] G_N = { 0.238619186083196908630, // x1
+			0.661209386466264513661, // x2
+			0.932469514203152027812 // x3
+	};
+	private static final double[] G_W = { 0.467913934572691047389, // w1
+			0.360761573048138607569, // w2
+			0.171324492379170345041 // w3
+	};
 
 	/**
 	 * The number of samples to use for approximating the curve parameter along the
@@ -53,8 +51,10 @@ public class CubicBezier {
 	private double[] sSample, tSample, tsSlope;
 
 	protected final double[] p1, cp1, cp2, p2;
-	protected final UnivariateFunction speedFunction;
 	protected double length = Double.NaN; // NaN marks yet to be computed and cached
+
+	private final double ax, bx, cx; // x'(t) = 3ax t² + 2*bx t + cx
+	private final double ay, by, cy;
 
 	/**
 	 * Constructs an instance of a {@code CubicBezier} using the given control
@@ -71,7 +71,16 @@ public class CubicBezier {
 		this.cp2 = cp2;
 		this.p2 = p2;
 
-		speedFunction = makeSpeedFunction();
+		// coefficients of the derivative polynomial B'(t)
+		// x'(t) = 3*ax t² + 2*bx t + cx */
+		// y'(t) = 3*ay t² + 2*by t + cy */
+		ax = -p1[0] + 3 * cp1[0] - 3 * cp2[0] + p2[0];
+		bx = 3 * p1[0] - 6 * cp1[0] + 3 * cp2[0];
+		cx = -3 * p1[0] + 3 * cp1[0];
+
+		ay = -p1[1] + 3 * cp1[1] - 3 * cp2[1] + p2[1];
+		by = 3 * p1[1] - 6 * cp1[1] + 3 * cp2[1];
+		cy = -3 * p1[1] + 3 * cp1[1];
 	}
 
 	/**
@@ -145,9 +154,16 @@ public class CubicBezier {
 	 * @return The arc length of the Bezier curve from tStart to tEnd.
 	 */
 	public double getArcLength(double tStart, double tEnd) {
-
-		double length = integrator.integrate(Integer.MAX_VALUE, speedFunction, tStart, tEnd);
-		return length;
+		final int SUB = 4; // << 1 call → 4 sub-calls
+		double h = (tEnd - tStart) / SUB;
+		double a = tStart;
+		double sum = 0;
+		for (int i = 0; i < SUB; i++) {
+			double b = a + h;
+			sum += gl6(a, b);
+			a = b;
+		}
+		return sum;
 	}
 
 	/**
@@ -160,7 +176,9 @@ public class CubicBezier {
 	 *         specified parameter.
 	 */
 	public double getGradientAtParameter(double t) {
-		return speedFunction.value(t);
+		double dx = (3 * ax * t + 2 * bx) * t + cx;
+		double dy = (3 * ay * t + 2 * by) * t + cy;
+		return Math.hypot(dx, dy);
 	}
 
 	/**
@@ -288,7 +306,7 @@ public class CubicBezier {
 				return t;
 			}
 			// Generate a candidate for Newton’s method.
-			double DFDT = speedFunction.value(t); // F'(t) > 0 is guaranteed.
+			double DFDT = getGradientAtParameter(t); // F'(t) > 0 is guaranteed.
 			double tCandidate = t - F / DFDT;
 			// Update the root-bounding interval and test for containment of the candidate.
 			if (F > 0) {
@@ -355,6 +373,26 @@ public class CubicBezier {
 	}
 
 	/**
+	 * Integrates {@link #speed(double)} on a sub-interval {@code [a,b]} by a single
+	 * application of the 6-point Gauss–Legendre quadrature rule.
+	 * 
+	 * @param a lower limit of integration (0 ≤ a ≤ b ≤ 1).
+	 * @param b upper limit of integration.
+	 * @return numerical approximation of ∫<sub>a</sub><sup>b</sup>speed(t) dt, i.e.
+	 *         the arc length between the two Bézier parameters.
+	 */
+	private double gl6(double a, double b) {
+		double c = 0.5 * (a + b); // centre
+		double h = 0.5 * (b - a); // half length
+		double s = 0.0;
+		for (int i = 0; i < 3; i++) {
+			double dx = h * G_N[i];
+			s += G_W[i] * (getGradientAtParameter(c - dx) + getGradientAtParameter(c + dx));
+		}
+		return h * s;
+	}
+
+	/**
 	 * Initialises the approximation data structures used to efficiently compute an
 	 * approximate value of the curve parameter for a given arc length along the
 	 * curve.
@@ -381,22 +419,6 @@ public class CubicBezier {
 
 			approximationIsSetup = true;
 		}
-	}
-
-	/**
-	 * Creates a speed function for this cubic bezier curve.
-	 * <p>
-	 * The speed is the magnitude of the first derivative of the Bezier curve (with
-	 * respect to t), which is calculated using the standard Bezier curve equations.
-	 * 
-	 * @return
-	 */
-	private UnivariateFunction makeSpeedFunction() {
-		return (double t) -> {
-			double dx = 3 * (1 - t) * (1 - t) * (cp1[0] - p1[0]) + 6 * (1 - t) * t * (cp2[0] - cp1[0]) + 3 * t * t * (p2[0] - cp2[0]);
-			double dy = 3 * (1 - t) * (1 - t) * (cp1[1] - p1[1]) + 6 * (1 - t) * t * (cp2[1] - cp1[1]) + 3 * t * t * (p2[1] - cp2[1]);
-			return Math.sqrt(dx * dx + dy * dy);
-		};
 	}
 
 }
