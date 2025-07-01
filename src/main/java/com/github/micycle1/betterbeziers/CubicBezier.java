@@ -1,4 +1,4 @@
-package micycle.betterbeziers;
+package com.github.micycle1.betterbeziers;
 
 import org.apache.commons.math3.analysis.UnivariateFunction;
 import org.apache.commons.math3.analysis.integration.IterativeLegendreGaussIntegrator;
